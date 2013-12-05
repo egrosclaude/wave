@@ -12,7 +12,14 @@
 float hcoef[] = ;
 float gcoef[] = ;
 */
-
+int filas(uchar *data, uchar *data2,
+            uint m, uint n, uint channels,
+            float *h, float *g, int fs,
+            uint c, uint f);
+int columnas(uchar *data, uchar *data2,
+            uint m, uint n, uint channels,
+            float *h, float *g, int fs,
+            uint c, uint f);
 // OpenCL kernel
 
 const char* source =
@@ -307,13 +314,13 @@ int filas(uchar *data, uchar *data2,
                     data2[j2 + ch] += data[j3 + ch] * h[k];
                 }
             } // OK
-            for(j = c + m/2; j < m; j++) {
+            for(j = c + m/2; j < c + m; j++) {
                 j1 = j * channels;
                 j2 = j1 + i1 * m;
                 data2[j2 + ch] = 0;
                 for(k = 0; k < fs; k++) {
                     j3 = 2 * j1 + i1 * m + k * channels;
-                    data2[j2 + ch] += data[j3 + ch] * g[k];
+                    data2[j2 + ch] += data[j3 + ch] * h[k];
                 }
             }
         } // OK
@@ -344,7 +351,8 @@ int columnas(uchar *data, uchar *data2,
                 data2[i2 + ch] = 0;
                 for(k = 0; k < fs; k++) {
                     i3 = 2 * i1 * m + j1 + k * channels;
-                    data2[i2 + ch] += data[i3 + ch] * g[k];
+                    data2[i2 + ch] += data[i3 + ch] * h[k];
+                    data2[i2 + ch] = data[i2 + ch];
                 }
             }
         }

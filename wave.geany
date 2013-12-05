@@ -31,5 +31,8 @@ last_dir=/home/oso/Copy/wavelets/wave
 
 [build-menu]
 EX_00_LB=_Execute
-EX_00_CM=optirun "./%e" imagen1.jpg
+EX_00_CM=optirun "./%e" lena.jpg
 EX_00_WD=
+NF_00_LB=_Make
+NF_00_CM=sh ./make-no-bullshit.sh
+NF_00_WD=
