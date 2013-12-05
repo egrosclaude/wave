@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 2.8)
+project( wave )
+find_package( OpenCL REQUIRED )
+find_package( OpenCV REQUIRED )
+include_directories( ${OPENCL_INCLUDE_DIR} ${OPENCV_INCLUDE_DIR})
+add_executable( wave wave.c timer.c )
+target_link_libraries( wave ${OpenCV_LIBS} ${OpenCL_LIBS})
