@@ -23,8 +23,9 @@ long_line_behaviour=1
 long_line_column=72
 
 [files]
-current_page=0
-FILE_NAME_0=0;C;0;EUTF-8;1;1;0;%2Fhome%2Foso%2FCopy%2Fwavelets%2Fwave%2Fwave.c;0;4
+current_page=1
+FILE_NAME_0=6542;C;0;EUTF-8;1;1;0;%2Fhome%2Foso%2FCopy%2Fwavelets%2Fwave%2Fwave.c;0;4
+FILE_NAME_1=0;reStructuredText;0;EUTF-8;1;1;0;%2Fhome%2Foso%2FCopy%2FRedes%2FCNP3%2Fbook-es%2Fnetwork%2Fipv4.rst;0;4
 
 [VTE]
 last_dir=/home/oso/Copy/wavelets/wave

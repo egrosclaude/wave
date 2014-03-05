@@ -8,20 +8,15 @@
 
 #define MAX_SOURCE_SIZE (0x100000)
 
-/*
-float hcoef[] = ;
-float gcoef[] = ;
-*/
-int filas(uchar *data, uchar *data2,
-            uint m, uint n, uint channels,
-            float *h, float *g, int fs,
-            uint c, uint f);
-int columnas(uchar *data, uchar *data2,
-            uint m, uint n, uint channels,
-            float *h, float *g, int fs,
-            uint c, uint f);
-// OpenCL kernel
 
+
+int filas(float *data, float *data2, uint m, uint n, uint channels,
+            float *h, float *g, int fs, uint wh, uint ht);
+int columnas(float *data, float *data2, uint m, uint n, uint channels,
+            float *h, float *g, int fs, uint wh, uint ht);
+
+
+// OpenCL kernel
 const char* source =
 	"__kernel \n"
 	"void simpleMultiply(\n"
@@ -200,159 +195,235 @@ void opencl()
 	free(device);
 }
 
+struct wavelet {
+#define MAXCOEFS 6
+		float phi[MAXCOEFS];
+		float psi[MAXCOEFS];
+		uint ncoefs;
+};
+
+struct wavelet haar = {
+	{.5f, .5f},
+	{.7071067811865475f, -.7071067811865475f},
+	2
+};
+/*
+struct wavelet daub4 = {
+	{ 0.4829f,    0.8365f, 	0.2241f,   -0.1294f },
+	{ -.1294f, -.2241f, .8365f,  -.4829f },
+	4
+};	
+*/
+struct wavelet daub4 = {
+	{ 0.3415f,    0.5915f, 	0.1585f,   -0.0915f },
+	{ -0.0915f,   -0.1585f,  0.5915f,  -0.3415f },
+	4
+};	
+
+struct wavelet db3 = {
+	{ 0.2352,    0.5706,    0.3252,   -0.0955,   -0.0604,    0.0249},
+	{ 0.2352,    0.5706,    0.3252,   -0.0955,   -0.0604,    0.0249},
+	6
+};
+
+struct wavelet *wavelet;
+
+
+
+
+/*
+float phihaar[] = {.5f, .5f};
+float psihaar[] = {.7071067811865475f, -.7071067811865475f};
+uint nhaar = 2;
 
 // DAUB4 Recipes = {.4829, .8365, .2241, -.1294} /
 // ESTA SIN NORMALIZAR. SUM(DAUB4)=1.4141; DAUB4/SUM(DAUB4) = db2
+// c0  c1 c2  c3 0 0 0 0 ....
+// c3 -c2 c1 -c0 0 0 0 0 ....
 
-float phihaar[] = {.5, .5};
-float psihaar[] = {.5, -.5};
-uint nhaar = 2;
-
-float db2[] = { 0.3415,    0.5915,    0.1585,   -0.0915};
+float db2[] = { 0.3415,    0.5915,    0.1585,   -0.0915 };
 float db3[] = { 0.2352,    0.5706,    0.3252,   -0.0955,   -0.0604,    0.0249};
 float db4[] = { 0.1629,    0.5055,    0.4461,   -0.0198,   -0.1323,    0.0218,    0.0233,   -0.0075};
+*/
 
+/*
+float phidb2[] = { 0.3415,    0.5915,    0.1585,   -0.0915 };
+float psidb2[] = {-0.0915,    -0.1585,   0.5915,  -0.3415 };
+uint ndb2 = 3;
+*/
 
-
+/*
+float phidb2[] = { 0.3415,    0.5915, 	0.1585,   -0.0915};
+float psidb2[] = { -.12940196, -.22415531,.83651652,  -.48295924};
+uint ndb2 = 4;
+*/
+/* Stollnitz p.88
+ * p = 1/4V2 (1+V3, 3+V3, 3-V3, 1-V3)
+ * q = 1/4V2 (1-V3, -3+V3, 3+V3, -1-V3)
+ * 15.45481364
+26.76852247
+7.17260403
+-4.14110480
+ * 
+ * -4.14110480
+-7.17260403
+26.76852247
+-15.45481364
+---------- MAL! --------------
+float phidb2[] = { 15.45481364, 26.76852247, 7.17260403, -4.14110480};
+float psidb2[] = { -4.14110480, -7.17260403, 26.76852247, -15.45481364};
+uint ndb2 = 4;
+*/  
+/*
 int seqGetCoefs(float **phicoefs, float **psicoefs, uint *ncoefs)
 {
 	*phicoefs = phihaar;
 	*psicoefs = psihaar;
 	*ncoefs = nhaar;
 }
-
-/*
- * int extractChannel(int channel, IplImage *img, IplImage *img2, float *signal)
-{
-	uchar *data = (uchar *)img->imageData;
-	uchar *data2 = (uchar *)img2->imageData;
-	int height    = img->height;
-	int width     = img->width;
-
-	int i;
-	for(i = 0; i < height * width; i++) {
-		*signal = (float) *(data + channel);
-		*data2 = *signal;
-		s++;
-		data += 3;
-		data2 += 1;
-	}
-}
 */
 
-int extractChannel(IplImage *img, int channel, float *signal)
+
+int seqGetCoefs(struct wavelet *w, float **phicoefs, float **psicoefs, uint *ncoefs)
 {
-	uchar *data = (uchar *)img->imageData;
-	int i;
-
-	int height    = img->height;
-	int width     = img->width;
-
-	for(i = 0; i < height * width; i++) {
-		*signal = (float) *(data + channel);
-		signal++;
-		data += 3;
-	}
+	*phicoefs = w->phi;
+	*psicoefs = w->psi;
+	*ncoefs = w->ncoefs;
 }
 
-int secuencial(IplImage *img, IplImage *img2)
+int img2signal(IplImage *img, float *signal)
+{
+	int i;
+	for(i=0; i < img->width * img->height * img->nChannels; i++)
+		signal[i] = (uchar) img->imageData[i];
+}
+
+int signal2img(float *signal, IplImage *img)
+{
+	int i;
+	for(i=0; i < img->width * img->height * img->nChannels; i++)
+		img->imageData[i] = signal[i];
+}
+
+
+int view(float *sig, IplImage *img)
+{
+	signal2img(sig,img);
+	cvShowImage("Resultado",img);
+	cvSaveImage("resultado.jpg",img,0);
+	cvWaitKey(0);		
+}
+
+int zero(IplImage *img, float *sig)
+{
+	memset((void *) sig,0,img->width * img->height * sizeof(float) * img->nChannels);
+}
+
+int secuencial(struct wavelet *wave, IplImage *img1, IplImage *img2)
 {
 	float *psicoefs, *phicoefs; uint ncoefs;
 	uint w, h, c, k;
+	float *signal1, *signal2, *sigh;
 
     int i;
 
-	seqGetCoefs((float **)&phicoefs, (float **)&psicoefs, &ncoefs);
+	seqGetCoefs(wave, (float **)&phicoefs, (float **)&psicoefs, &ncoefs);
 
     for(i=0; i < ncoefs; i++)
         printf("phi[%d]=%.2f  psi[%d]=%.2f\n",i,phicoefs[i],i,psicoefs[i]);
 
-	w = img->width;
-	h = img->height;
-	c = img->nChannels;
+	w = img1->width;
+	h = img1->height;
+	c = img1->nChannels;
+	
+	signal1 = (float *) malloc(sizeof(float) * w * h * c);
+	signal2 = (float *) malloc(sizeof(float) * w * h * c);
+	
+	img2signal(img1, signal1);
+	cvShowImage("ORIGINAL",img1);
+	cvWaitKey(0);	
 
-	k=0;
-/*	while(w > 2) {
-		procesar(signal + k + channel, w, phicoefs, psicoefs, ncoefs, signal2);
+	for(k=0; k<6; k++) {
+
+		filas(signal1, signal2, w, h, c, phicoefs, psicoefs, ncoefs,
+		img1->width,img1->height);
+		columnas(signal2, signal1, w, h, c, phicoefs, psicoefs, ncoefs,
+		img1->width,img1->height);
+
+		view(signal1, img1);
 		w /= 2;
+		h /= 2;
 	}
-	*/
-
-	filas(img->imageData, img2->imageData, w, h, c, phicoefs, psicoefs, ncoefs,0, 0);
-  	columnas(img2->imageData, img->imageData, w, h, c, phicoefs, psicoefs, ncoefs,0, 0);
 
 }
 
-/* data = datos originales
-   m = ancho de la fila
-   n = altura de la columna
-   ch = canal 0,1,2
-   phi = coeficientes de h pasabajos
-   psi = coeficientes de g pasaaltos
-   fs = tamaño del filtro h o g
-   data2 = buffer destino
-   c = columna inicial
-   f = fila inicial
-
-*/
-int filas(uchar *data, uchar *data2,
-            uint m, uint n, uint channels,
-            float *h, float *g, int fs,
-            uint c, uint f)
+int filas(float *data, float *data2, uint m, uint n, uint channels,
+            float *h, float *g, int fs, uint wh, uint ht)
 {
 	uint i,j,k, i1, j1, j2, j3, ch;
 
-    for(ch = 0; ch < 3; ch++)
-        for(i = f; i < f + n; i++) {
-            i1 = i * channels;
-            for(j = c; j < c + m/2; j++) {
-                j1 = j * channels;
-                j2 = j1 + i1 * m;
-                data2[j2 + ch] = 0;
+    for(ch = 0; ch < channels; ch++)
+        for(i = 0; i < n; i++) {
+  
+            for(j = 0; j < m/2; j++) {
+                j2 = (j + i * wh) * channels + ch;
+                //assert(0 <= j2 && j2 <= 512 * 512 * 3);
+                data2[j2] = 0.;
                 for(k = 0; k < fs; k++) {
-                    j3 = 2 * j1 + i1 * m + k * channels;
-                    data2[j2 + ch] += data[j3 + ch] * h[k];
-                }
+                    j3 = (2 * j + i * wh + k) * channels + ch;                    
+                    //assert(0 <= j3);
+                    //assert(j3 <= 512 * 512 * 3);
+                    //printf("data2[j2]=%f, data[j3]=%f, h[k]=%f\n",data2[j2], data[j3], h[k]);
+                    data2[j2] += data[j3] * h[k];
+                    //assert(data2[j2] >= 0);
+				}
             } // OK
-            for(j = c + m/2; j < c + m; j++) {
-                j1 = j * channels;
-                j2 = j1 + i1 * m;
-                data2[j2 + ch] = 0;
+            for(j = m/2; j < m; j++) {
+                j2 = (j + i * wh) * channels + ch;
+                //assert(0 <= j2 && j2 <= 512 * 512 * 3);
+                data2[j2] = 0.;
                 for(k = 0; k < fs; k++) {
-                    j3 = 2 * j1 + i1 * m + k * channels;
-                    data2[j2 + ch] += data[j3 + ch] * h[k];
+                    j3 = (2 * (j - m/2) + i * wh + k) * channels + ch;
+                    //assert(0 <= j3);
+                    //assert(j3 <= 512 * 512 * 3);
+                    //printf("data2[j2]=%f, data[j3]=%f, g[k]=%f\n",data2[j2], data[j3], g[k]);
+                    data2[j2] += data[j3] * g[k];
+                    //assert(data2[j2] >= 0);
                 }
             }
         } // OK
 }
 
-int columnas(uchar *data, uchar *data2,
-            uint m, uint n, uint channels,
-            float *h, float *g, int fs,
-            uint c, uint f)
+int columnas(float *data, float *data2, uint m, uint n, uint channels,
+            float *h, float *g, int fs, uint wh, uint ht)
 {
 	uint i,j,k, i1, j1, i2, i3, ch;
 
-    for(ch = 0; ch < 3; ch++)
-        for(j = c; j < c + m; j++) {
-            j1 = j * channels;
-            for(i = f; i < f + n/2; i++) {
-                i1 = i * channels;
-                i2 = j1 + i1 * m;
-                data2[i2 + ch] = 0;
+    for(ch = 0; ch < channels; ch++)
+        for(j = 0; j < m; j++) {
+			
+            for(i = 0; i < n/2; i++) {
+                i2 = (j + i * wh) * channels + ch;
+                //assert(0 <= i2 && i2 <= 512 * 512 * 3);
+                data2[i2] = 0;
                 for(k = 0; k < fs; k++) {
-                    i3 = 2 * i1 * m + j1 + k * channels;
-                    data2[i2 + ch] += data[i3 + ch] * h[k];
+                    i3 = (2 * i * wh + k * wh + j) * channels + ch;
+                    //assert(0 <= i3);
+                    //assert(i3 <= 512 * 512 * 3);
+                    data2[i2] += data[i3] * h[k];
+                    //assert(data2[i2] >= 0);
                 }
             }
-           for(i = f + n/2; i < f + n; i++) {
-                i1 = i * channels;
-                i2 = j1 + i1 * m;
-                data2[i2 + ch] = 0;
+           for(i = n/2; i < n; i++) {
+                i2 = (j + i * wh) * channels + ch;
+                //assert(0 <= i2 && i2 <= 512 * 512 * 3);
+                data2[i2] = 0;
                 for(k = 0; k < fs; k++) {
-                    i3 = 2 * i1 * m + j1 + k * channels;
-                    data2[i2 + ch] += data[i3 + ch] * h[k];
-                    data2[i2 + ch] = data[i2 + ch];
+                    i3 = (j + 2 * (i - n/2) * wh + k * wh) * channels + ch; 
+                    //assert(0 <= i3);
+                    //assert(i3 <= 512 * 512 * 3);
+                    data2[i2] += data[i3] * g[k];
+                    //assert(data2[i2] >= 0);
                 }
             }
         }
@@ -360,75 +431,93 @@ int columnas(uchar *data, uchar *data2,
 }
 
 
-// This code executes on the OpenCL host
+int refilas(float *data, float *data2, uint m, uint n, uint channels,
+			float *rh, float *rg, int fs, uint wh, uint ht)
+{
+}
+
+
+// Prueba para ver funciones de conversion
+int backandforth(IplImage *img1, IplImage *img2)
+{
+	float *signal1, *signal2;
+	uint w, h, c, k;
+
+	w = img1->width;
+	h = img1->height;
+	c = img1->nChannels;	
+
+	signal1 = (float *) malloc(sizeof(float) * w * h * c);
+	signal2 = (float *) malloc(sizeof(float) * w * h * c);
+	
+	img2signal(img1,signal1);
+	signal2img(signal1,img2);
+	
+	cvShowImage("FORTH",img2);
+	cvWaitKey(0);
+	
+}
+
 int main(int argc, char *argv[]) {
 
-	IplImage *img,*img2;
+	IplImage *img1,*img2;
 	double elapsed;
 	uint height, width, step, channels;
 
 	uchar *data;
-	float *signal;
 	int i;
 	uint channel;
 
-	if(argc != 2) {
-		printf("wave <imagen>\n");
+	if(argc != 3) {
+		printf("wave <modelo> <imagen>\n");
 		exit(1);
 	}
 
+	// wavelet model
+	wavelet = (struct wavelet *) NULL;
+	if(! strcmp(argv[1],"haar"))
+		wavelet = &haar;
+	if(! strcmp(argv[1],"daub4")) 
+		wavelet = &daub4;
+	if(! strcmp(argv[1],"db3")) 
+		wavelet = &db3;
+	if(! wavelet)
+		debug("No se conoce el modelo (haar, daub4)", 0);
+	
+
   	// load an image
-	img=cvLoadImage(argv[1],1);
-	if(!img){
+	img1=cvLoadImage(argv[2],1);
+	if(!img1){
 		printf("Could not load image file: %s\n",argv[1]);
 		exit(0);
   	}
 
 	// get the image data
-	height    = img->height;
-	width     = img->width;
-	step      = img->widthStep;
-	channels  = img->nChannels;
-	data      = (uchar *)img->imageData;
+	height    = img1->height;
+	width     = img1->width;
+	step      = img1->widthStep;
+	channels  = img1->nChannels;
+	data      = (uchar *)img1->imageData;
 	printf("Processing a %dx%d image with %d channels - step = %d\n",height,width,channels, step);
 
-	img2 = cvCreateImage(cvSize(img->width,img->height),IPL_DEPTH_8U,1);
-	img2->imageData = (uchar *) malloc(sizeof(uchar)*img->height * img->width * channels);
+	// prepare second image object
+	img2 = cvCreateImage(cvSize(width, height),IPL_DEPTH_8U,1);
+	img2->imageData = (uchar *) malloc(sizeof(uchar)* height * width * channels);
 	img2->widthStep = step;
 	img2->nChannels = channels;
-	for(i=0; i < height * width * channels; i++)
-        img2->imageData[i] = img->imageData[i];
-	cvShowImage("INICIAL",img2);
-	//cvWaitKey(0);
 
-
-	//imgG = cvCreateImage(cvSize(img->width,img->height),IPL_DEPTH_8U,1);
-	//imgB = cvCreateImage(cvSize(img->width,img->height),IPL_DEPTH_8U,1);
-	//imgA = cvCreateImage(cvSize(img->width,img->height),IPL_DEPTH_8U,1);
-
-	//signal = (float *) malloc(sizeof(float) * img->height * img->width);
-
-	//channel = 0;
-	//extractChannel(img, channel, signal);
-
+	// copy img1 into img2
+	//for(i=0; i < height * width * channels; i++)
+    //   img2->imageData[i] = img1->imageData[i];
+	
 	timerOn();
-	secuencial(img,img2);
+	secuencial(wavelet, img1, img2);
+//backandforth(img1,img2);
 	elapsed = timerOff();
-	printf("Secuencial %lf ms\n",elapsed);
+	printf("Secuencial %e ms\n",elapsed);
 
-	opencl();
-	cvShowImage("FINAL",img);
-
-/*	cvShowImage("RED", imgR);
-	cvShowImage("GREEN", imgG);
-	cvShowImage("BLUE", imgB);
-	cvShowImage("ALPHA", imgA);
-*/
-	cvWaitKey(0);
-
-
+//	opencl();
 	timerOn();
-	//parGetCoefs();
 	elapsed = timerOff();
 	printf("Paralelo %lf ms\n",elapsed);
 
