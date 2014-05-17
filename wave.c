@@ -174,7 +174,7 @@ void opencl()
 	debug("execute",ciErrNum);
 //----------------------------------------------------------------------------
 
-
+ 
 	// Read the output data back to host
 	ciErrNum = clEnqueueReadBuffer(
 		myqueue, bufferC, CL_TRUE, 0, C->w * C->h *sizeof(float),
@@ -195,41 +195,77 @@ void opencl()
 	free(device);
 }
 
+#define MAXCOEFS 9
+#define MAXMODELS 10
+uint CANTMODELS = 0;
 struct wavelet {
-#define MAXCOEFS 6
+        char nombre[10];
 		float phi[MAXCOEFS];
 		float psi[MAXCOEFS];
 		uint ncoefs;
 };
+struct wavelet * modelos[MAXMODELS];
+struct wavelet * wavelet; // the_wavelet
 
-struct wavelet haar = {
-	{.5f, .5f},
-	{.7071067811865475f, -.7071067811865475f},
-	2
-};
-/*
-struct wavelet daub4 = {
-	{ 0.4829f,    0.8365f, 	0.2241f,   -0.1294f },
-	{ -.1294f, -.2241f, .8365f,  -.4829f },
-	4
-};	
-*/
-struct wavelet daub4 = {
-	{ 0.3415f,    0.5915f, 	0.1585f,   -0.0915f },
-	{ -0.0915f,   -0.1585f,  0.5915f,  -0.3415f },
-	4
-};	
+int registrarmodelo(struct wavelet *w)
+{
+        int i;
+        modelos[CANTMODELS] = w;
+        printf("Modelo %d nombre %s\n", CANTMODELS, modelos[CANTMODELS]->nombre);
+		CANTMODELS++;        
+}
+        
+struct wavelet haar = { 
+                "haar", 
+               {.5f, .5f}, 
+               {.7071067811865475f, -.7071067811865475f}, 
+               2 
+        };
+struct wavelet daub3 = { 
+                "daub3",
+                { 0.2352f,    0.5706f,    0.3252f,   -0.0955f,   -0.0604f,    0.0249f}, 
+                { 0.2352f,    0.5706f,    0.3252f,   -0.0955f,   -0.0604f,    0.0249f}, 
+                6
+        }; 
+struct wavelet daub4 = { 
+                "daub4",
+                { 0.3415f,    0.5915f, 	0.1585f,   -0.0915f}, 
+                { -0.0915f,   -0.1585f,  0.5915f,  -0.3415f}, 
+                4 
+        };
+struct wavelet daub9 = { 
+                "daub9",
+                { 0.026749f, -0.016864f, -0.078223f, 0.266864f,  0.602949f,  0.266864f, -0.078223f, -0.016864f, 0.026749f}, 
+                { 0.091272f, -0.057544f, -0.591272f, 1.115087f, -0.591272f, -0.057544f,  0.091272f,  0.f,  		0.f}, 
+                9 
+        };
 
-struct wavelet db3 = {
-	{ 0.2352,    0.5706,    0.3252,   -0.0955,   -0.0604,    0.0249},
-	{ 0.2352,    0.5706,    0.3252,   -0.0955,   -0.0604,    0.0249},
-	6
-};
+int builtins()
+{
+       registrarmodelo(&haar);
+       registrarmodelo(&daub3);
+       registrarmodelo(&daub4);
+       registrarmodelo(&daub9);
+}
 
-struct wavelet *wavelet;
 
+struct wavelet *modelo(int argc, char *argv[])
+{
+        int i;
+        for(i = 0; (i < CANTMODELS) && (i < MAXMODELS); i++)
+                if(! strcmp(argv[1],modelos[i]->nombre))
+		        return modelos[i];
+        return (struct wavelet *) NULL;
+}
 
-
+int printmodelos()
+{
+        int i;
+        printf("Modelos conocidos: \n");
+        for(i = 0; (i < CANTMODELS) && (i < MAXMODELS); i++)
+                printf("\t%s\n",modelos[i]->nombre);
+}
+	
 
 /*
 float phihaar[] = {.5f, .5f};
@@ -295,14 +331,14 @@ int img2signal(IplImage *img, float *signal)
 {
 	int i;
 	for(i=0; i < img->width * img->height * img->nChannels; i++)
-		signal[i] = (uchar) img->imageData[i];
+		signal[i] = (uchar) img->imageData[i] - 127.;
 }
 
 int signal2img(float *signal, IplImage *img)
 {
 	int i;
 	for(i=0; i < img->width * img->height * img->nChannels; i++)
-		img->imageData[i] = signal[i];
+		img->imageData[i] = signal[i] + 127;
 }
 
 
@@ -317,6 +353,13 @@ int view(float *sig, IplImage *img)
 int zero(IplImage *img, float *sig)
 {
 	memset((void *) sig,0,img->width * img->height * sizeof(float) * img->nChannels);
+}
+
+
+int swapsignal(float *s1, float *s2)
+{
+        float *h;
+        h = s1; s1 = s2; s2 = h;
 }
 
 int secuencial(struct wavelet *wave, IplImage *img1, IplImage *img2)
@@ -343,13 +386,10 @@ int secuencial(struct wavelet *wave, IplImage *img1, IplImage *img2)
 	cvShowImage("ORIGINAL",img1);
 	cvWaitKey(0);	
 
-	for(k=0; k<6; k++) {
+	for(k=0; k<5; k++) {
 
-		filas(signal1, signal2, w, h, c, phicoefs, psicoefs, ncoefs,
-		img1->width,img1->height);
-		columnas(signal2, signal1, w, h, c, phicoefs, psicoefs, ncoefs,
-		img1->width,img1->height);
-
+		filas(signal1, signal2, w, h, c, phicoefs, psicoefs, ncoefs, img1->width,img1->height);
+		columnas(signal2, signal1, w, h, c, phicoefs, psicoefs, ncoefs, img1->width,img1->height);
 		view(signal1, img1);
 		w /= 2;
 		h /= 2;
@@ -473,22 +513,19 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
+
+        builtins();
+
 	// wavelet model
-	wavelet = (struct wavelet *) NULL;
-	if(! strcmp(argv[1],"haar"))
-		wavelet = &haar;
-	if(! strcmp(argv[1],"daub4")) 
-		wavelet = &daub4;
-	if(! strcmp(argv[1],"db3")) 
-		wavelet = &db3;
-	if(! wavelet)
-		debug("No se conoce el modelo (haar, daub4)", 0);
-	
+        if(!(wavelet = modelo(argc, argv))) {
+                printmodelos();
+                debug("No se conoce el modelo pedido\n", -1);
+        }
 
   	// load an image
 	img1=cvLoadImage(argv[2],1);
 	if(!img1){
-		printf("Could not load image file: %s\n",argv[1]);
+		printf("Could not load image file: %s\n",argv[2]);
 		exit(0);
   	}
 
@@ -508,15 +545,19 @@ int main(int argc, char *argv[]) {
 
 	// copy img1 into img2
 	//for(i=0; i < height * width * channels; i++)
-    //   img2->imageData[i] = img1->imageData[i];
+        //   img2->imageData[i] = img1->imageData[i];
 	
 	timerOn();
 	secuencial(wavelet, img1, img2);
-//backandforth(img1,img2);
+        //backandforth(img1,img2);
 	elapsed = timerOff();
 	printf("Secuencial %e ms\n",elapsed);
 
 //	opencl();
+
+	// reconstruir
+
+        
 	timerOn();
 	elapsed = timerOff();
 	printf("Paralelo %lf ms\n",elapsed);
